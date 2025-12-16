@@ -1,0 +1,45 @@
+{
+  "name": "opensession",
+  "version": "0.0.6",
+  "description": "Web viewer for OpenCode sessions",
+  "type": "module",
+  "bin": {
+    "opensession": "./bin/cli.js"
+  },
+  "files": [
+    "bin",
+    "app",
+    "lib",
+    "next.config.js",
+    "tsconfig.json",
+    "next-env.d.ts"
+  ],
+  "scripts": {
+    "dev": "next dev -p 3456",
+    "build": "next build",
+    "start": "next start -p 3456"
+  },
+  "keywords": [
+    "opencode",
+    "session",
+    "viewer",
+    "ai",
+    "coding"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sst/opencode"
+  },
+  "dependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "next": "^16.0.0",
+    "nuqs": "^2.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.0.0"
+  }
+}
