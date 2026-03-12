@@ -1,17 +1,54 @@
+/**
+ * Unit tests for the next.config.js Windows NTFS junction workaround.
+ *
+ * ─── WHAT THIS FILE TESTS ───────────────────────────────────────────────────
+ * next.config.js runs `process.chdir(realpathSync(process.cwd()))` at module
+ * load time.  These tests verify:
+ *   1. realpathSync does not throw on the current working directory.
+ *   2. process.chdir to the real path does not throw.
+ *   3. On a real (non-junction) path the cwd is effectively unchanged.
+ *   4. Importing next.config.js actually executes the chdir (integration check).
+ *
+ * ─── WHAT THIS FILE CANNOT TEST ─────────────────────────────────────────────
+ * The junction mismatch scenario (where realpathSync(cwd) !== cwd) requires an
+ * actual NTFS junction or symlink to exist.  Creating one requires either
+ * Windows with admin rights or a Unix symlink.  Simulating the mismatch with
+ * string manipulation does NOT exercise the workaround code path and would pass
+ * even if the workaround were removed — such a test is misleading and has been
+ * deliberately omitted.  The observable, cross-platform behavior is covered by
+ * the four tests below.
+ *
+ * ─── BUN TEST RUNNER (March 2026) ───────────────────────────────────────────
+ * These tests use the `bun:test` module, Bun's first-party, built-in test
+ * runner.  It provides a Jest-compatible API (describe / it / expect / hooks)
+ * with no external dependencies.
+ * Ref: https://bun.sh/docs/cli/test
+ *
+ * DEVIATION: `bun:test` is not a Node.js built-in and cannot be run with node,
+ * vitest, or jest without a compatibility shim.  Tests are intentionally
+ * coupled to Bun because the project (package.json scripts, CI) already
+ * mandates Bun as the runtime.
+ *
+ * MANUAL VERIFICATION ON WINDOWS (junction scenario)
+ * The junction mismatch case cannot be reproduced in CI on Linux/macOS runners.
+ * To manually verify the workaround on Windows:
+ *   1. Create an NTFS junction:  mklink /J C:\test-junction C:\real-dir
+ *   2. cd C:\test-junction && bun run dev
+ *   3. Confirm the server starts without doubled-path errors in the console.
+ *   4. The E2E tests in tests/e2e/app.test.ts then validate that all API
+ *      routes return correct responses (not 500s from malformed paths).
+ * This manual test should be run whenever next.config.js is modified.
+ *
+ * ─── afterEach HOOK ─────────────────────────────────────────────────────────
+ * Each test that calls process.chdir must restore the original cwd afterwards
+ * to prevent state leakage into subsequent tests.  bun:test does not sandbox
+ * process state between tests; the afterEach hook is the recommended pattern
+ * for cleanup.
+ * Ref: https://bun.sh/docs/cli/test#lifecycle-hooks
+ */
+
 import { describe, it, expect, afterEach } from "bun:test";
 import { realpathSync } from "fs";
-
-// ---------------------------------------------------------------------------
-// next.config.js Windows NTFS junction workaround
-// ---------------------------------------------------------------------------
-// The workaround calls:
-//   process.chdir(realpathSync(process.cwd()))
-//
-// On systems without junctions / symlinks this is a no-op because
-// realpathSync(process.cwd()) === process.cwd().
-// On Windows NTFS junction paths the two can differ, which caused Next.js
-// to concatenate them and produce invalid doubled paths.
-// ---------------------------------------------------------------------------
 
 describe("next.config.js realpathSync workaround", () => {
   const originalCwd = process.cwd();
@@ -42,39 +79,6 @@ describe("next.config.js realpathSync workaround", () => {
     // The resolved path may differ in casing on case-insensitive filesystems, so
     // compare case-insensitively.
     expect(process.cwd().toLowerCase()).toBe(before.toLowerCase());
-  });
-
-  it("simulates a junction mismatch: chdir to the real path resolves the doubled-path bug", () => {
-    // Simulate a Windows NTFS junction where cwd (the junction path) differs
-    // from realpathSync(cwd) (the actual real path).
-    //
-    // Before the fix, Next.js would see:
-    //   cwd = C:\Users\user\.cache\opensession\0.0.6              (junction)
-    //   realpath = R:\real\.cache\opensession\0.0.6
-    // and concatenate them → doubled/invalid path.
-    //
-    // The fix ensures process.cwd() === realPath before Next.js starts,
-    // so Next.js sees only one path and does not concatenate them.
-
-    const simulatedJunctionPath = "/C/Users/user/.cache/opensession/0.0.6";
-    const simulatedRealPath = "/R/real/.cache/opensession/0.0.6";
-
-    // The bug: Next.js joins junctionPath + realPath
-    const buggyNextPath = simulatedJunctionPath + simulatedRealPath;
-
-    // After the fix cwd === realPath, so Next.js joins realPath + realPath
-    // which is still wrong conceptually but the real test is:
-    // the fixed cwd is simply the real path, so Next.js uses only realPath.
-    const fixedCwd = simulatedRealPath;
-
-    // Verify the bug would have produced a path longer than the real path alone
-    expect(buggyNextPath.length).toBeGreaterThan(simulatedRealPath.length);
-
-    // After the fix, process.cwd() equals the real path (no junction prefix)
-    expect(fixedCwd).toBe(simulatedRealPath);
-
-    // And the fixed path does NOT start with the junction path
-    expect(fixedCwd.startsWith(simulatedJunctionPath)).toBe(false);
   });
 
   it("importing next.config.js applies the realpathSync cwd workaround", async () => {
