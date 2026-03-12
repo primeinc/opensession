@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { mkdir, writeFile, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -12,7 +12,7 @@ import {
   scanDirs,
   readJson,
   exists,
-} from "../lib/storage.js";
+} from "../../lib/storage.js";
 
 // ---------------------------------------------------------------------------
 // STORAGE_PATH
@@ -39,7 +39,7 @@ describe("STORAGE_PATH", () => {
 // File-system helpers
 // ---------------------------------------------------------------------------
 
-const fixtureDir = join(tmpdir(), `opensession-test-${process.pid}`);
+const fixtureDir = join(tmpdir(), `storage-test-${process.pid}`);
 
 beforeAll(async () => {
   await mkdir(fixtureDir, { recursive: true });
@@ -60,11 +60,9 @@ describe("exists()", () => {
     expect(await exists(join(fixtureDir, "no-such-file.json"))).toBe(false);
   });
 
-  it("returns false for a path that is a directory", async () => {
+  it("returns true for a path that is a directory", async () => {
     const dir = join(fixtureDir, "subdir");
     await mkdir(dir, { recursive: true });
-    // exists() uses fs.access which resolves for directories too, so the
-    // directory itself is accessible – the return value is true.
     expect(await exists(dir)).toBe(true);
   });
 });
