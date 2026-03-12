@@ -17,7 +17,9 @@
   "scripts": {
     "dev": "next dev -p 3456",
     "build": "next build",
-    "start": "next start -p 3456"
+    "start": "next start -p 3456",
+    "test": "bun test tests/unit",
+    "test:e2e": "bun test --timeout 90000 tests/e2e"
   },
   "keywords": [
     "opencode",
