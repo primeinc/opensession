@@ -3,16 +3,16 @@ import { mkdir, writeFile, rm } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 
-// Tests for lib/storage.ts cross-platform behaviour
-// We import the functions under test after setting up fixtures so we
-// can pass concrete paths rather than relying on STORAGE_PATH.
+// Tests for lib/storage.ts cross-platform behaviour.
+// We exercise both STORAGE_PATH and the helpers that accept concrete paths,
+// using temporary fixtures created below rather than relying on global state.
 import {
   STORAGE_PATH,
   scanJson,
   scanDirs,
   readJson,
   exists,
-} from "../../lib/storage.js";
+} from "../../lib/storage";
 
 // ---------------------------------------------------------------------------
 // STORAGE_PATH

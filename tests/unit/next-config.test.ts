@@ -76,4 +76,13 @@ describe("next.config.js realpathSync workaround", () => {
     // And the fixed path does NOT start with the junction path
     expect(fixedCwd.startsWith(simulatedJunctionPath)).toBe(false);
   });
+
+  it("importing next.config.js applies the realpathSync cwd workaround", async () => {
+    const before = process.cwd();
+    // Import next.config.js which runs:
+    //   process.chdir(realpathSync(process.cwd()))
+    await import("../../next.config.js");
+    // After the import, cwd should be the real path of the original cwd.
+    expect(process.cwd()).toBe(realpathSync(before));
+  });
 });

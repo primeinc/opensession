@@ -17,7 +17,7 @@ import type { Subprocess } from "bun";
 const PORT = 3457; // avoid colliding with the normal dev port
 const BASE = `http://localhost:${PORT}`;
 
-let server: Subprocess<"ignore", "ignore", "ignore"> | null = null;
+let server: Subprocess<"ignore", "pipe", "pipe"> | null = null;
 
 /** Poll until the server responds or the timeout elapses. */
 async function waitForServer(timeoutMs = 60_000): Promise<void> {
@@ -44,12 +44,23 @@ beforeAll(async () => {
     ["bun", "./node_modules/.bin/next", "dev", "-p", String(PORT)],
     {
       cwd: import.meta.dir + "/../..",
-      stdout: "ignore",
-      stderr: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
     },
   );
 
-  await waitForServer();
+  try {
+    await waitForServer();
+  } catch (err) {
+    // Dump captured output so CI logs show why the server failed to start.
+    const [stdout, stderr] = await Promise.all([
+      new Response(server.stdout).text(),
+      new Response(server.stderr).text(),
+    ]);
+    if (stdout) console.error("--- server stdout ---\n" + stdout);
+    if (stderr) console.error("--- server stderr ---\n" + stderr);
+    throw err;
+  }
 }, 90_000);
 
 afterAll(() => {
