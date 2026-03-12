@@ -37,11 +37,11 @@ async function waitForServer(timeoutMs = 60_000): Promise<void> {
 
 beforeAll(async () => {
   // Spawn the Next.js dev server on PORT.
-  // Using "./node_modules/.bin/next" avoids any npm / bun prefix ambiguity
-  // and works identically on Linux, macOS, and Windows (the .bin symlinks /
-  // shims are always present after `bun install`).
+  // "bunx next" is cross-platform: Bun resolves the "next" package from the
+  // local node_modules without relying on platform-specific .bin shims
+  // (.bin/next on Unix vs next.cmd/next.ps1 on Windows).
   server = Bun.spawn(
-    ["bun", "./node_modules/.bin/next", "dev", "-p", String(PORT)],
+    ["bunx", "next", "dev", "-p", String(PORT)],
     {
       cwd: import.meta.dir + "/../..",
       stdout: "pipe",

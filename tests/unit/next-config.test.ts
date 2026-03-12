@@ -44,39 +44,6 @@ describe("next.config.js realpathSync workaround", () => {
     expect(process.cwd().toLowerCase()).toBe(before.toLowerCase());
   });
 
-  it("simulates a junction mismatch: chdir to the real path resolves the doubled-path bug", () => {
-    // Simulate a Windows NTFS junction where cwd (the junction path) differs
-    // from realpathSync(cwd) (the actual real path).
-    //
-    // Before the fix, Next.js would see:
-    //   cwd = C:\Users\user\.cache\opensession\0.0.6              (junction)
-    //   realpath = R:\real\.cache\opensession\0.0.6
-    // and concatenate them → doubled/invalid path.
-    //
-    // The fix ensures process.cwd() === realPath before Next.js starts,
-    // so Next.js sees only one path and does not concatenate them.
-
-    const simulatedJunctionPath = "/C/Users/user/.cache/opensession/0.0.6";
-    const simulatedRealPath = "/R/real/.cache/opensession/0.0.6";
-
-    // The bug: Next.js joins junctionPath + realPath
-    const buggyNextPath = simulatedJunctionPath + simulatedRealPath;
-
-    // After the fix cwd === realPath, so Next.js joins realPath + realPath
-    // which is still wrong conceptually but the real test is:
-    // the fixed cwd is simply the real path, so Next.js uses only realPath.
-    const fixedCwd = simulatedRealPath;
-
-    // Verify the bug would have produced a path longer than the real path alone
-    expect(buggyNextPath.length).toBeGreaterThan(simulatedRealPath.length);
-
-    // After the fix, process.cwd() equals the real path (no junction prefix)
-    expect(fixedCwd).toBe(simulatedRealPath);
-
-    // And the fixed path does NOT start with the junction path
-    expect(fixedCwd.startsWith(simulatedJunctionPath)).toBe(false);
-  });
-
   it("importing next.config.js applies the realpathSync cwd workaround", async () => {
     const before = process.cwd();
     // Import next.config.js which runs:
