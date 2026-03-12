@@ -1,14 +1,89 @@
 /**
  * E2E tests for the opensession Next.js server.
  *
+ * ─── PURPOSE ────────────────────────────────────────────────────────────────
  * These tests start the actual Next.js development server (which loads
- * next.config.js — including the realpathSync / process.chdir workaround
- * that fixes the Windows NTFS junction bug) and then hit every API route
- * with real HTTP requests.
+ * next.config.js — including the realpathSync / process.chdir workaround that
+ * fixes the Windows NTFS junction bug) and then hit every API route with real
+ * HTTP requests.
  *
  * If next.config.js breaks server startup, or if any route returns a 5xx
- * because of a malformed path, these tests will catch it on every OS
- * that the CI matrix runs against (ubuntu, macos, windows).
+ * because of a malformed path, these tests will catch it on every OS that
+ * the CI matrix runs against (ubuntu, macos, windows).
+ *
+ * ─── BUN TEST RUNNER (March 2026) ───────────────────────────────────────────
+ * Uses bun:test for describe / it / expect / lifecycle hooks.
+ * Ref: https://bun.sh/docs/cli/test
+ *
+ * DEVIATION: bun:test is Bun-specific; these tests cannot be run with node,
+ * vitest, or jest without a compatibility shim.
+ *
+ * ─── SUBPROCESS SPAWNING: bunx (best practice – March 2026) ─────────────────
+ * The Next.js dev server is started with:
+ *   Bun.spawn(["bunx", "next", "dev", "-p", PORT])
+ *
+ * WHY "bunx next" instead of "./node_modules/.bin/next"
+ *   On POSIX systems, `bun install` creates a shell-script shim at
+ *   ./node_modules/.bin/next.  On Windows, Bun creates next.cmd and next.ps1
+ *   shims but no Unix shell script.  Invoking "./node_modules/.bin/next"
+ *   directly via Bun.spawn on Windows therefore fails to resolve the
+ *   executable.
+ *
+ *   `bunx` is Bun's package runner (equivalent to npx).  It resolves the
+ *   "next" binary from the local node_modules/.bin directory first, then from
+ *   the global Bun store, using the platform-correct mechanism on every OS.
+ *   Ref: https://bun.sh/docs/cli/bunx
+ *
+ * DEVIATION FROM ALTERNATIVE "bun run dev" APPROACH
+ *   The package.json "dev" script hard-codes port 3456.  Using "bun run dev"
+ *   would conflict with a running dev server on that port and does not allow
+ *   the test to specify its own port.  "bunx next dev -p PORT" is therefore
+ *   the correct approach for tests that must control the port.
+ *
+ * ─── Bun.spawn API (March 2026) ─────────────────────────────────────────────
+ * Bun.spawn() is Bun's native subprocess API.
+ * Ref: https://bun.sh/docs/api/spawn
+ *
+ * stdout / stderr: "pipe"
+ *   Pipes both streams to ReadableStream objects on the returned Subprocess.
+ *   The streams are consumed only on server startup failure to produce useful
+ *   CI log output.  In the happy path, the streams are never read and are
+ *   discarded when the server is killed in afterAll.
+ *
+ *   DEVIATION: Bun's first-party docs show consuming subprocess streams with
+ *   the async iterator protocol (`for await (const chunk of subprocess.stdout)`).
+ *   This file uses `new Response(subprocess.stdout).text()` instead, which
+ *   buffers the entire stream via the WHATWG Fetch API Response constructor —
+ *   a Bun-specific extension that accepts a ReadableStream<Uint8Array> as a
+ *   Response body.  The approach is acceptable for error-path diagnostics where
+ *   the full output is always small (server startup log) but would be
+ *   inappropriate for large or infinite streams.
+ *   Ref: https://bun.sh/docs/api/fetch (Response constructor)
+ *   Ref: https://bun.sh/docs/api/spawn#output
+ *
+ * ─── import.meta.dir (March 2026) ───────────────────────────────────────────
+ * `import.meta.dir` is Bun's equivalent of Node.js `__dirname`: the absolute
+ * path to the directory containing the current module file.
+ * Ref: https://bun.sh/docs/api/import-meta
+ *
+ * DEVIATION FROM NODE.JS: `import.meta.dir` is a Bun extension and is not
+ * part of the WinterCG / WHATWG import.meta specification.  Node.js ESM
+ * modules must use `import.meta.url` + `new URL('../..', import.meta.url)`
+ * to derive the same path.  Bun also supports the Node.js idiom, but
+ * `import.meta.dir` is shorter and idiomatic for Bun projects.
+ *
+ * ─── PORT SELECTION ─────────────────────────────────────────────────────────
+ * Port 3457 is used (not the default 3456 in package.json "dev") to avoid
+ * colliding with a developer's running instance.  It is not dynamically
+ * allocated; a fixed port is sufficient because CI runners do not run user
+ * services on arbitrary ports.
+ *
+ * ─── SERVER READINESS POLLING ───────────────────────────────────────────────
+ * waitForServer polls /api/projects every 500 ms up to 60 s.  This is a
+ * simple but reliable strategy for dev-server startup; Next.js dev builds can
+ * take 20–45 s on a cold CI runner.  The timeout on beforeAll (90 s) is set
+ * to match the per-test --timeout flag and gives the server 60 s + 30 s
+ * buffer for the first request.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
@@ -37,9 +112,10 @@ async function waitForServer(timeoutMs = 60_000): Promise<void> {
 
 beforeAll(async () => {
   // Spawn the Next.js dev server on PORT.
-  // "bunx next" is cross-platform: Bun resolves the "next" package from the
-  // local node_modules without relying on platform-specific .bin shims
-  // (.bin/next on Unix vs next.cmd/next.ps1 on Windows).
+  // "bunx next" is cross-platform: bunx checks local node_modules/.bin first,
+  // then the global Bun store, using the platform-correct mechanism on every OS
+  // (.bin/next on Unix vs next.cmd/next.ps1 on Windows are both resolved
+  // internally by Bun — callers do not need to know which shim to invoke).
   server = Bun.spawn(
     ["bunx", "next", "dev", "-p", String(PORT)],
     {

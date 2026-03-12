@@ -1,3 +1,49 @@
+/**
+ * Unit tests for lib/storage.ts — cross-platform storage helpers.
+ *
+ * ─── PURPOSE ────────────────────────────────────────────────────────────────
+ * lib/storage.ts provides four helpers used throughout the API routes:
+ *   • STORAGE_PATH  – computed path to the opencode storage directory
+ *   • exists()      – non-throwing stat check
+ *   • readJson()    – safe JSON file reader (null on any error)
+ *   • scanJson()    – reads all *.json files from a directory
+ *   • scanDirs()    – lists immediate subdirectory names
+ *
+ * Tests exercise real file-system operations on a temporary fixture directory
+ * created in os.tmpdir() so they run correctly on Linux, macOS, and Windows
+ * without any mocking.
+ *
+ * ─── BUN TEST RUNNER (March 2026) ───────────────────────────────────────────
+ * Uses bun:test for describe / it / expect / lifecycle hooks.
+ * Ref: https://bun.sh/docs/cli/test
+ *
+ * DEVIATION: bun:test is Bun-specific; these tests cannot be run with node,
+ * vitest, or jest without a compatibility shim.
+ *
+ * ─── TEST FIXTURE MANAGEMENT ────────────────────────────────────────────────
+ * A unique fixture directory is created in beforeAll and removed in afterAll.
+ *
+ * Fixture path: os.tmpdir() + "/storage-test-<pid>"
+ *   • os.tmpdir() returns the platform-specific temp directory:
+ *       Linux/macOS  →  /tmp  (or $TMPDIR)
+ *       Windows      →  C:\Users\<user>\AppData\Local\Temp
+ *     Ref: https://nodejs.org/api/os.html#ostmpdir
+ *   • Including process.pid prevents collisions when the test suite runs in
+ *     parallel workers (bun test --jobs N).
+ *
+ * DEVIATION: bun:test runs all tests in a single worker process by default
+ * (unlike vitest which forks per-file).  The pid suffix is therefore redundant
+ * in the default bun configuration but is kept as defensive practice and for
+ * correctness should parallel test execution be enabled in the future.
+ * Ref: https://bun.sh/docs/cli/test#parallelism
+ *
+ * ─── STORAGE_PATH CONVENTION ────────────────────────────────────────────────
+ * OpenCode stores sessions at ~/.local/share/opencode/storage on all platforms
+ * (Windows uses the same XDG-like path via os.homedir()).  The test asserts the
+ * suffix `opencode[/\]storage` to remain correct on both POSIX and Windows path
+ * separators.
+ */
+
 import { describe, it, expect, beforeAll, afterAll } from "bun:test";
 import { mkdir, writeFile, rm } from "fs/promises";
 import { join } from "path";
